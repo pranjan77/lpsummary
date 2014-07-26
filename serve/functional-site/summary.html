@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html ng-app="landing-pages" lang="en">
+	<head>
+		<title>KBase Narrative Interface (prototype)</title>
+		<link rel="icon" type="image/x-icon" href="assets/img/KBase_favicon.ico">
+
+		<!-- Global KBase css -->
+		<link rel="stylesheet" type="text/css" href="../ext/bootstrap/3.0.0/css/bootstrap.css" />
+		<link rel="stylesheet" type="text/css" href="../ext/jquery-ui/1.10.3/css/custom-theme/jquery-ui-1.10.0.custom.css"> 
+
+		<link rel="stylesheet" type="text/css" href="assets/css/dataTables.bootstrap.css" />
+
+
+
+		<script src="../ext/jquery/jquery-1.10.2.min.js"></script>
+		<!-- <script src="../ext/jquery-migrate/jquery-migrate-1.2.1.js"></script> -->
+		<script src="../ext/jquery-ui/1.10.3/js/jquery-ui-1.10.3.custom.min.js"></script>
+		<script src="../ext/blockUI/jquery.blockUI.js"></script>
+		<script src="../ext/bootstrap/3.0.0/js/bootstrap.js"></script>
+		<script src="../ext/d3/d3.v3.min.js"></script>
+		<script src="../ext/dataTables/1.9.4/js/jquery.dataTables.js"></script>
+		<script src="assets/js/dataTables.bootstrap.js"></script>
+		<script src="assets/js/jquery.dataTables.rowGrouping.js"></script>
+		<script src="assets/js/dataTables.colReorder.min.js"></script>
+		<script src="assets/js/dataTable.colVis.js"></script>
+		<script src="assets/js/dataTables.tableTools.js"></script>     
+
+		<!-- KBase client library javascript -->
+		<script src="assets/js/kbclient/kbase.js"></script>
+		<script src="assets/js/kbclient/workspaceDeluxe.js"></script>
+		<script src="assets/js/kbclient/userandjobstate.js"></script>        
+		<!--<script src="assets/js/kbclient/projects.js"></script>        -->
+		<script src="assets/js/kbclient/wikiScraper.js"></script>
+
+	</head>
+
+	<body style='padding:50px;'>
+		<div class="tabbable">
+			<ul class="nav nav-tabs" id='layer1Tabs'>
+				<li class="active"><a href="#population" id='TAB_POPULATION' data-toggle="tab">Population</a></li>
+				<li><a href="#traits" data-toggle="tab" id='TAB_traitTab' >Traits</a></li>
+			</ul>
+			<div class="tab-content" id='layer1'>
+				<div id="population" class="tab-pane active" style='padding:30px;'>
+					<h4>GWAS Summary Population Details</h4>
+					<div id='popContent'><img src='assets/img/loading.gif' style='padding-left:170px;padding-top: 30px;' /></div>
+				</div>
+				<div id="traits" class="tab-pane" style='padding:30px;'>
+					<div id='traitsContent'><img src='assets/img/loading.gif' style='padding-left:420px;padding-top: 30px;' /></div>
+				</div>
+			</div><!-- /.tab-content -->
+		</div><!-- /.tabbable -->
+	</body>
+
+	<script>
+		$(function() {
+			var workspaceURL="https://kbase.us/services/ws";
+		  var workspaceClient = new Workspace(workspaceURL);
+			var id = "summary";
+			var workspace = "KBasePublicGwasData";
+
+			// Population Tag -- Execute on start
+			workspaceClient.get_objects([{name : id, workspace: workspace}], 
+				function(data){
+					var id = data[0].data.gwasPopulations[0].populationId;
+
+
+					workspaceClient.get_objects([{name : id, workspace: workspace}], 
+					function(data2) {
+						var collection = data2[0];
+						$('#popContent').html($("<dl/>").addClass('dl-horizontal')
+							.append(("<dt>ID</dt><dd>" + collection.data.genome.kbase_genome_id + "</dd>"))
+							.append(("<dt>Name</dt><dd>" + collection.data.genome.kbase_genome_name + "</dd>"))
+							.append(("<dt>Source</dt><dd>" + collection.data.genome.source + "</dd>"))
+							.append(("<dt>Source Name</dt><dd>" + collection.data.genome.source_genome_name + "</dd>"))
+							.append(("<dt>Description</dt><dd>" + collection.data.GwasPopulation_description + "</dd>"))
+							);
+					});	
+
+			});
+			// End of Population Tab
+
+			// Function to close the clicked tab
+			closeTab = function(tabId, tabContentId) {
+				$('#'+tabId).remove();
+				$('#'+tabContentId).remove();
+			}
+			// End of Function to close the clicked tab
+
+			// renderGene individual click
+			renderGene = function(geneId) {
+				var $div = $("<div/>");
+				$div.append("<h4>GWAS Summary Gene</h4>");
+				
+				workspaceClient.get_objects([{name : geneId, workspace: workspace}], 
+					function(data){
+						console.log(data[0]);
+						/*
+						$div.append(JSON.stringify(data[0]));
+						$('#'+geneId).html($div);
+						*/
+				});
+			}
+			
+			// AddGenelistTab -- conlick for Genelist
+			addGeneTab = function(geneId) {
+				$('#layer3').append('<div class="tab-pane" id="'+geneId+'" type="geneId"><p><img src="assets/img/loading.gif" /></p></div>');
+				$('#layer3Tabs').append('<li><a href="#'+geneId+'" id="TAB_TRAIT_'+geneId+'" data-toggle="tab" onclick="renderGene(\''+geneId+'\');" >'+geneId+' <span class="glyphicon glyphicon-remove-circle" onclick="closeTab(\'TAB_TRAIT_'+geneId+'\', \''+geneId+'\');"></span></a></li>');
+
+				return false;
+			};
+			// End AddGenelistTab -- conlick for Genelist
+
+			// renderGenes onClick
+			renderGenes = function(tvId) {
+				$('#GenesContent'+tvId).html("<h4>GeneList:" + tvId + " </h4>");
+
+				workspaceClient.get_objects([{name : id, workspace: workspace}], 
+					function(data2){
+						console.log(data2[0]);
+						var tvs = data2[0].data.topvariation_and_genelist;
+
+						var $contTable = $("<dir/>").css('height', 'auto').css('overflow-y', 'scroll').css('width','50%');
+						var $domainTable = $("<table/>").addClass("table table-bordered table-striped");                        
+						$domainTable.append('<thead><tr><th>Trait</th><th>Top Variations</th><th</th></tr></thead>');
+
+						tvs.forEach(function(tv) {
+							if (tv.topvariationId === tvId ) {
+								tv.genelists.forEach(function(gene) {
+									var row = "<tr><td>"+tvId+"</td><td><a href='#'  onclick='addGeneTab(\""+gene.genelistId+"\");'>"+gene.genelistId+"</a></td></tr>"
+									$domainTable.append(row);
+								});
+							}
+						});
+						$domainTable.append("</tbody></table>");
+						$contTable.append($domainTable);
+						$('#GenesContent'+tvId).html($contTable);
+
+				});
+			}
+			// End renderGenes onClick
+
+
+			// Render Top Variation Content Individual
+			renderIndividualTopVariation = function(tvId) {
+
+				var $div = $("<div/>").css('padding', '30px');
+
+				var content = $([
+					'<div class="tabbable">'
+				,		'<ul class="nav nav-tabs" id="layer3Tabs">'
+				,			'<li class="active"><a href="#tvDetails'+tvId+'" id="TAB_TVDETAILS_'+tvId+'" data-toggle="tab">Top Variation Details</a></li>'
+				,			'<li><a href="#Genes'+tvId+'" data-toggle="tab" id="TAB_GENES_'+tvId+'" onclick="renderGenes(\''+tvId+'\');">Genes</a></li>'
+				,		'</ul>'
+				,		'<div class="tab-content" id="layer3">'
+				,			'<div id="tvDetails'+tvId+'" class="tab-pane active" style="padding:30px;">'
+				,				'<h4>GWAS Summary Top Variation Details</h4>'
+				,				'<div id="tvDetailsContent'+tvId+'"><img src="assets/img/loading.gif" /></div>'
+				,			'</div>'
+				,			'<div id="Genes'+tvId+'" class="tab-pane" style="padding:30px;">'
+				,				'<div id="GenesContent'+tvId+'"><img src="assets/img/loading.gif" /></div>'
+				,			'</div>'
+				,		'</div>'
+				,	'</div>'
+				].join(""));
+
+				$div.append(content);
+				$('#'+tvId).html($div);
+
+
+				//$('#'+tvId).html(JSON.stringify(data[0]));
+				var $contTable = $("<dir/>").css('height', 'auto').css('overflow-y', 'scroll').css('width','50%');
+				var $domainTable = $("<table/>").addClass("table table-bordered table-striped");                        
+				$domainTable.append("<thead>"
+					+ "<tr><th>kb_contig_id"
+					+ "</th><th>id"
+					+ "</th><th>Position"
+					+ "</th><th>-log p Value"
+					+ "</th><th>p Value </th></tr></thead><tbody>");
+				
+
+				workspaceClient.get_objects([{name : tvId, workspace: workspace}], 
+					function(data){
+						var contigs = data[0].data.contigs;
+						data[0].data.variations.forEach(function(v){
+							
+						  var row = "<tr><td>" + contigs[v[0]].kbase_contig_id
+								+ "</td><td>" + contigs[v[0]].id
+								+ "</td><td>" + v[1]
+								+ "</td><td>" + v[2]
+								+ "</td><td>" + v[3] +"</td></tr>"
+							$domainTable.append(row);
+						
+						});
+						$domainTable.append("</tbody></table>");
+						$contTable.append($domainTable);
+						$('#tvDetailsContent'+tvId).html($contTable);
+
+				});
+			}
+			// End Render Top Variation Content Individual
+
+
+			// AddTraitTab -- conlick for traits
+			addTraitTab = function(trait) {
+				$('#layer1').append('<div class="tab-pane" id="'+trait+'" type="trait"><p><img src="assets/img/loading.gif" /></p></div>');
+				$('#layer1Tabs').append('<li><a href="#'+trait+'" id="TAB_TRAIT_'+trait+'" data-toggle="tab" >'+trait+' <span class="glyphicon glyphicon-remove-circle" onclick="closeTab(\'TAB_TRAIT_'+trait+'\', \''+trait+'\');"></span></a></li>');
+
+				return false;
+			};
+			// End AddTraitTab -- conlick for traits
+
+			// Add Top Variation Tab onClick topvariabtionIndividual
+			 addTopVariationTab = function(topVariation) {
+				 $('#layer2').append('<div class="tab-pane" id="'+topVariation+'" type="topVariation"><p><img src="assets/img/loading.gif" /></p></div>');
+				 $('#layer2Tabs').append('<li><a href="#'+topVariation+'" id="TAB_TOPVARIATION_'+topVariation+'" data-toggle="tab" onclick="renderIndividualTopVariation(\''+topVariation+'\');" >'+topVariation+' <span class="glyphicon glyphicon-remove-circle" ></span></a></li>');
+
+				return false;
+			}
+			// End Add Top Variation Tab onClick topvariabtionIndividual
+			
+
+			// Top Variations onClick
+			renderTopVariationsTable = function(traitId) {
+				$('#topVariationsContent'+traitId).html('<h4>Top Variations Table Display</h4>');
+
+				workspaceClient.get_objects([{name : id, workspace: workspace}], 
+					function(data2){
+						console.log(data2[0]);
+						var traits = data2[0].data.trait_and_topvariation;
+
+						var $contTable = $("<dir/>").css('height', 'auto').css('overflow-y', 'scroll').css('width','50%');
+						var $domainTable = $("<table/>").addClass("table table-bordered table-striped");                        
+						$domainTable.append('<thead><tr><th>Trait</th><th>Top Variations</th><th</th></tr></thead>');
+
+						traits.forEach(function(trait) {
+							if (trait.traitId === traitId ) {
+								trait.topvariations.forEach(function(tv) {
+									var row = "<tr><td>"+traitId+"</td><td><a href='#'  onclick='addTopVariationTab(\""+tv.topvariationId+"\");'>"+tv.topvariationId+"</a></td></tr>"
+									$domainTable.append(row);
+								});
+							}
+						});
+						$domainTable.append("</tbody></table>");
+						$contTable.append($domainTable);
+						$('#topVariationsContent'+traitId).append($contTable);
+
+						/*
+						var $contTable = $("<dir/>").css('height', 'auto').css('overflow-y', 'scroll').css('width','50%');
+						$contTable.attr('id', 'popTable');
+						var $domainTable = $("<table/>").addClass("table table-bordered table-striped");                        
+						$domainTable.append('<thead><tr><th>Population</th><th>Trait</th><th</th></tr></thead>');
+
+						trait.traits.forEach(function(item) {
+							$domainTable.append($("<tr>")
+								.append($("<td>").append(trait.populationId))
+								.append( "<td><a href='#' onclick=\"addTraitTab('" + item.traitId + 
+										"');return false;\">" + item.traitId + "</a></td>"));
+						});
+
+						$contTable.append($domainTable);
+						//$domainTable.dataTable();
+						$('#traitsContent').html($contTable);
+						*/
+				});
+
+			}
+			// End Top Variations onClick
+
+			// Trait Chart onClick
+			renderChart = function(traitId) {
+				var $div = $("<div/>");
+					$div.append("<h4>GWAS Summary Trait Chart</h4>");
+				
+				workspaceClient.get_objects([{name : traitId, workspace: workspace}], 
+					function(data){
+						$div.append(JSON.stringify(data[0]));
+						$('#traitChart'+traitId).html($div);
+				});
+			}
+			// End Trait Chart onClick
+
+			// Trait Tab onclick
+			renderInvidualTrait = function(tabId, traitId, containerId) {
+				//$('#'+containerId).html('hello');
+				var $div = $("<div/>").css('padding', '30px');
+
+				var content = $([
+					'<div class="tabbable">'
+				,		'<ul class="nav nav-tabs" id="layer2Tabs">'
+				,			'<li class="active"><a href="#traitMap'+traitId+'" id="TAB_TRAITMAP_'+traitId+'" data-toggle="tab">Trait Map</a></li>'
+				,			'<li><a href="#traitChart'+traitId+'" data-toggle="tab" id="TAB_BARCHART_'+traitId+'" onclick="renderChart(\''+traitId+'\');">Trait Chart</a></li>'
+				,			'<li><a href="#topVariations'+traitId+'" data-toggle="tab" id="TAB_TOPVARIATION_'+traitId+'" onclick="renderTopVariationsTable(\''+traitId+'\');">Top Variations</a></li>'
+				,		'</ul>'
+				,		'<div class="tab-content" id="layer2">'
+				,			'<div id="traitMap'+traitId+'" class="tab-pane active" style="padding:30px;">'
+				,				'<h4>GWAS Summary Trait Details</h4>'
+				,				'<div id="traitMapContent'+traitId+'"><img src="assets/img/loading.gif" /></div>'
+				,			'</div>'
+				,			'<div id="traitChart'+traitId+'" class="tab-pane" style="padding:30px;">'
+				,				'<div id="traitChartContent'+traitId+'"><img src="assets/img/loading.gif" /></div>'
+				,			'</div>'
+				,			'<div id="topVariations'+traitId+'" class="tab-pane" style="padding:30px;">'
+				,				'<div id="topVariationsContent'+traitId+'"><img src="assets/img/loading.gif" /></div>'
+				,			'</div>'
+				,		'</div>'
+				,	'</div>'
+				].join(""));
+
+				$div.append(content);
+				$('#'+containerId).html($div);
+
+				workspaceClient.get_objects([{name : traitId, workspace: workspace}], 
+					function(data){
+						$('#traitMapContent'+traitId).html(JSON.stringify(data[0]));
+				});
+
+
+			}
+			// End of Trait Tab onclick
+
+			// Traits onClick
+			var renderTraitTab = function() {
+				workspaceClient.get_objects([{name : id, workspace: workspace}], 
+					function(data2){
+						var trait = data2[0].data.population_and_trait[0];
+
+						var $contTable = $("<dir/>").css('height', 'auto').css('overflow-y', 'scroll').css('width','50%');
+						$contTable.attr('id', 'popTable');
+						var $domainTable = $("<table/>").addClass("table table-bordered table-striped");                        
+						$domainTable.append('<thead><tr><th>Population</th><th>Trait</th><th</th></tr></thead>');
+
+						trait.traits.forEach(function(item) {
+							$domainTable.append($("<tr>")
+								.append($("<td>").append(trait.populationId))
+								.append( "<td><a href='#' onclick=\"addTraitTab('" + item.traitId + 
+										"');return false;\">" + item.traitId + "</a></td>"));
+						});
+
+						$contTable.append($domainTable);
+						//$domainTable.dataTable();
+						$('#traitsContent').html($contTable);
+				});
+			};
+			// End Traits onClick
+
+			// FALSE -- Traits onClick
+			var FALSErenderTraitTab = function() {
+				workspaceClient.get_objects([{name : id, workspace: workspace}], 
+					function(data2){
+						var id = data2[0].data.gwasPopulations[0].populationId;
+
+            workspaceClient.get_objects([{name : id, workspace: workspace}], 
+                function(data, err){
+                    collection = data[0];
+                    var id = collection.data.GwasPopulation_obj_id;
+                    var innerSelf = {};
+
+                    workspaceClient.get_objects([{name: id, workspace: workspace}], function(data2){
+                        innerSelf.collection = data2[0];
+                        var $contTable = $("<dir/>").css('height', 'auto').css('overflow-y', 'scroll');
+                        $contTable.attr('id', 'popTable');
+
+                        var $domainTable = $("<table/>").addClass("table table-bordered table-striped");                        
+                        var ecotypeDetails = innerSelf.collection.data.ecotype_details;
+                        $domainTable.append('<thead><tr><th>Country</th><th>Ecotype Id</th><th>Native Name</th><th>Region</th><th>Site</th><th>Stock Parent</th></tr></thead>');
+
+                        for (var i=0; i<ecotypeDetails.length; i++) {
+                            $domainTable.append($("<tr>")
+                                .append($("<td>").append(ecotypeDetails[i].country))
+                                .append($("<td>").append(ecotypeDetails[i].ecotype_id))
+                                .append($("<td>").append(ecotypeDetails[i].nativename))
+                                .append($("<td>").append(ecotypeDetails[i].region))
+                                .append($("<td>").append(ecotypeDetails[i].site))
+                                .append($("<td>").append(ecotypeDetails[i].stockparent)));
+                        }
+                        $contTable.append($domainTable);
+                        $domainTable.dataTable();
+                        $('#traitsContent').append($contTable);
+                    });
+                });
+				});
+			};
+			// End Traits onClick
+
+			// Layer 1 tabs onClick
+			$("#layer1Tabs").on("click", "a", function(e){
+					var id = e.target.id;
+					var type = id.substr(0,10)
+				if (e.target.id === 'TAB_traitTab') {
+					renderTraitTab();
+				} else if (type === 'TAB_TRAIT_') {
+					renderInvidualTrait(e.target.id, 
+															e.target.id.substring(10), 
+															e.target.id.substring(10) )
+				} else {
+					//alert(e.target.id);
+				}
+			});
+			// End Layer 1 tabs onClick
+
+		});
+
+	</script>
+
+</html>
